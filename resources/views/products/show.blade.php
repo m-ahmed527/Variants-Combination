@@ -17,7 +17,7 @@
     <div class="container my-4">
         <h2>{{ $product->name }}</h2>
         <p>{{ $product->description }}</p>
-
+        {{-- @dd($product->variants[0]->values) --}}
         <form>
             <div class="row" id="variant-selectors">
                 @foreach ($attributes as $attribute)
