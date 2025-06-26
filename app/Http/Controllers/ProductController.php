@@ -53,7 +53,22 @@ class ProductController extends Controller
     public function show(Product $product)
     {
         $product->load('variants.values.attribute');
-        $attributes = Attribute::with('values')->get();
+        // $attributes = Attribute::with('values')->get();
+        // Filter only attributes and values used in this product's variants
+        $usedAttributes = collect();
+        $usedValues = collect();
+
+        foreach ($product->variants as $variant) {
+            foreach ($variant->values as $value) {
+                $usedValues->push($value);
+                $usedAttributes->push($value->attribute);
+            }
+        }
+        // Unique attributes and values only
+        $attributes = $usedAttributes->unique('id')->map(function ($attribute) use ($usedValues) {
+            $attribute->values = $usedValues->where('attribute_id', $attribute->id)->unique('id')->values();
+            return $attribute;
+        });
 
         $variantMap = [];
         foreach ($product->variants as $variant) {

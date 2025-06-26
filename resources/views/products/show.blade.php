@@ -20,7 +20,10 @@
         {{-- @dd($product->variants[0]->values) --}}
         <form>
             <div class="row" id="variant-selectors">
-                @foreach ($attributes as $attribute)
+
+                {{-- for dropdowns --}}
+
+                {{-- @foreach ($attributes as $attribute)
                     <div class="col-md-3 mb-3">
                         <label class="form-label">{{ $attribute->name }}</label>
                         <select class="form-select variant-select" data-attribute-id="{{ $attribute->id }}">
@@ -30,7 +33,30 @@
                             @endforeach
                         </select>
                     </div>
+                @endforeach --}}
+
+                {{-- for radio buttons --}}
+                @foreach ($attributes as $attribute)
+                    <div class="mb-3">
+                        <label class="form-label d-block fw-bold">{{ $attribute->name }}:</label>
+
+                        @foreach ($attribute->values as $value)
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input variant-radio" type="radio"
+                                    name="attribute_{{ $attribute->id }}" data-attribute-id="{{ $attribute->id }}"
+                                    value="{{ $value->id }}">
+                                <label class="form-check-label">{{ $value->value }}</label>
+                            </div>
+                        @endforeach
+
+                        {{-- Reset Button --}}
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-2 reset-attribute"
+                            data-attribute-id="{{ $attribute->id }}">
+                            Reset {{ $attribute->name }}
+                        </button>
+                    </div>
                 @endforeach
+
             </div>
         </form>
         <form id="cart-form">
@@ -64,8 +90,8 @@
 
     <div id="cart-message" class="mt-3 text-success fw-bold"></div> --}}
 
-    {{-- 👇 Script below all HTML --}}
-    <script>
+    {{-- 👇 Script for dropdown --}}
+    {{-- <script>
         const variantMap = @json($variantMap);
         const priceDisplay = $('#variant-price');
         const stockDisplay = $('#variant-stock');
@@ -124,7 +150,7 @@
             });
 
             // AJAX for price & stock + variant_id for cart
-            if (Object.keys(selected).length === $('.variant-select').length) {
+            if (Object.keys(selected).length == $('.variant-select').length) {
                 $.ajax({
                     url: "{{ route('products.getVariant') }}",
                     method: "POST",
@@ -188,8 +214,145 @@
                 }
             });
         });
-    </script>
+    </script> --}}
 
+
+    {{-- 👇 Script for radio buttons --}}
+    <script>
+        const variantMap = @json($variantMap);
+        const priceDisplay = $('#variant-price');
+        const stockDisplay = $('#variant-stock');
+        let currentVariantId = null;
+
+        function getSelectedAttributes() {
+            const selected = {};
+            $('.variant-radio:checked').each(function() {
+                const attrId = $(this).data('attribute-id');
+                selected[attrId] = parseInt($(this).val());
+            });
+            return selected;
+        }
+
+        function filterRadios(changedInput = null) {
+            const selected = getSelectedAttributes();
+
+            $('.variant-radio').prop('disabled', false); // reset all first
+
+            if (changedInput && !$(changedInput).is(':checked')) {
+                // If radio was unchecked (user clicked same again), stop here
+                priceDisplay.text('-');
+                stockDisplay.text('-');
+                $('#selected-variant-id').val('');
+                currentVariantId = null;
+                return;
+            }
+
+            // Loop through all attribute radios
+            $('.variant-radio').each(function() {
+                const currentAttr = $(this).data('attribute-id');
+                const currentVal = parseInt($(this).val());
+
+                const otherSelected = {
+                    ...selected
+                };
+                delete otherSelected[currentAttr]; // remove self from filtering
+
+                const isValid = variantMap.some(function(combo) {
+                    let match = true;
+                    for (const key in otherSelected) {
+                        if (combo[key] !== otherSelected[key]) {
+                            match = false;
+                            break;
+                        }
+                    }
+                    return match && combo[currentAttr] === currentVal;
+                });
+
+                if (!isValid) {
+                    $(this).prop('disabled', true);
+                    // Uncheck if already selected and invalid now
+                    if ($(this).is(':checked')) {
+                        $(this).prop('checked', false);
+                    }
+                }
+            });
+
+            // Check if full selection done
+            if (Object.keys(selected).length === {{ $attributes->count() }}) {
+                $.ajax({
+                    url: "{{ route('products.getVariant') }}",
+                    method: "POST",
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        product_id: {{ $product->id }},
+                        attribute_value_ids: Object.values(selected)
+                    }),
+                    success: function(data) {
+                        if (data.price) {
+                            priceDisplay.text(`$${data.price}`);
+                            stockDisplay.text(data.stock);
+                        } else {
+                            priceDisplay.text('-');
+                            stockDisplay.text('-');
+                        }
+
+                        if (data.variant_id) {
+                            $('#selected-variant-id').val(data.variant_id);
+                            currentVariantId = data.variant_id;
+                        }
+                    }
+                });
+            } else {
+                priceDisplay.text('-');
+                stockDisplay.text('-');
+                $('#selected-variant-id').val('');
+                currentVariantId = null;
+            }
+        }
+
+        // 🔄 On radio change
+        $('.variant-radio').on('change', function() {
+            filterRadios(this);
+        });
+        $('.reset-attribute').on('click', function() {
+            const attrId = $(this).data('attribute-id');
+
+            // Uncheck selected radio of this attribute
+            $(`.variant-radio[data-attribute-id="${attrId}"]`).prop('checked', false);
+
+            // Trigger filtering logic to update UI
+            filterRadios();
+        });
+        // 🛒 Cart submission
+        $('#cart-form').on('submit', function(e) {
+            e.preventDefault();
+            const variantId = $('#selected-variant-id').val();
+            const quantity = $('#quantity').val();
+
+            if (!variantId) {
+                alert('Please select valid variant first.');
+                return;
+            }
+
+            $.ajax({
+                url: "{{ route('cart.add') }}",
+                method: "POST",
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                data: {
+                    variant_id: variantId,
+                    quantity: quantity
+                },
+                success: function(response) {
+                    $('#cart-message').text(response.message);
+                }
+            });
+        });
+    </script>
 
 
 
