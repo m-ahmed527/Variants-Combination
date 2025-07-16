@@ -230,6 +230,7 @@
                 const attrId = $(this).data('attribute-id');
                 selected[attrId] = parseInt($(this).val());
             });
+
             return selected;
         }
 
@@ -252,9 +253,11 @@
                 const currentAttr = $(this).data('attribute-id');
                 const currentVal = parseInt($(this).val());
 
+
                 const otherSelected = {
                     ...selected
                 };
+
                 delete otherSelected[currentAttr]; // remove self from filtering
 
                 const isValid = variantMap.some(function(combo) {
