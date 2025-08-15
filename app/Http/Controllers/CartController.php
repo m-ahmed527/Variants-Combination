@@ -50,7 +50,19 @@ class CartController extends Controller
             'message' => 'Product added to cart.',
         ]);
     }
+    public function removeFromCart(Request $request)
+    {
+        $variantId = $request->variant_id; // jis variant ko remove karna hai
 
+        $cart = session()->get('cart', []);
+
+        if (isset($cart['items'][$variantId])) {
+            unset($cart['items'][$variantId]); // remove item
+            $this->recalculateCart($cart);
+        }
+
+        session()->put('cart', $cart);
+    }
     private function recalculateCart($cart)
     {
 
